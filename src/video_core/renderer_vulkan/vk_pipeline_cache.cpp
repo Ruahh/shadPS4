@@ -201,6 +201,28 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
     return it->second;
 }
 
+bool ShouldSkipShader(u64 shader_hash, const char* shader_type) {
+    static std::vector<u64> skip_hashes = {
+        // Menus
+        0xa12c240a, // Causes blue(tm), so needs to be skipped. Can get to menus without skipping it, but very broken.
+        0xdd2e7072, // Device Loss at loadscreen
+        0xc5f6bede, // Device Loss ^  Makes the graphics much darker when skipped.
+
+        // Ingame
+        //0x232e176d, // WAS Unknown opcode V_MED3_U32 (879, category = VectorALU) // NOW Texel buffer stride must match format stride
+        //0x595a3faa, // Texel buffer stride must match format stride
+
+        // Ingame - outside
+        0x9c9190e,  // i forgor
+
+    };
+    if (std::ranges::contains(skip_hashes, shader_hash)) {
+        LOG_WARNING(Render_Vulkan, "Skipped {} shader hash {:#x}.", shader_type, shader_hash);
+        return true;
+    }
+    return false;
+}
+
 bool PipelineCache::RefreshGraphicsKey() {
     std::memset(&graphics_key, 0, sizeof(GraphicsPipelineKey));
 
@@ -383,6 +405,9 @@ bool PipelineCache::RefreshComputeKey() {
     Shader::Backend::Bindings binding{};
     const auto* cs_pgm = &liverpool->regs.cs_program;
     const auto cs_params = Liverpool::GetParams(*cs_pgm);
+    if (ShouldSkipShader(cs_params.hash, "compute")) {
+        return false;
+    }
     std::tie(infos[0], modules[0], compute_key) =
         GetProgram(Shader::Stage::Compute, cs_params, binding);
     return true;

@@ -10,6 +10,7 @@
 #include "core/libraries/kernel/file_system.h"
 #include "core/libraries/libs.h"
 #include "libkernel.h"
+#include <common/alignment.h>
 
 namespace Libraries::Kernel {
 
@@ -429,6 +430,15 @@ s64 PS4_SYSV_ABI sceKernelPread(int d, void* buf, size_t nbytes, s64 offset) {
     if (file == nullptr) {
         return ORBIS_KERNEL_ERROR_EBADF;
     }
+
+    // Thank you turtle <3 <3
+    VAddr base = Common::AlignDown(VAddr(buf), 4_KB);
+    VAddr end = Common::AlignDown(VAddr(buf) + nbytes, 4_KB);
+    do {
+        volatile u8* ptr = reinterpret_cast<u8*>(base);
+        *ptr = *ptr;
+        base += 4_KB;
+    } while (base <= end);
 
     std::scoped_lock lk{file->m_mutex};
     const s64 pos = file->f.Tell();
